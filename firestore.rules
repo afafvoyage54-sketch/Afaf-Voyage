@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - displayName: string (required) - Full Name
+    //   - email: string (required, email) - User Email
+    //   - role: string (required, enum: admin, client) - User Role
+    //   - createdAt: timestamp (required) - Account Creation Date
+    //
+    // Collection: bookings
+    // Document ID: {bookingId}
+    // Fields:
+    //   - uid: string (required) - User UID
+    //   - serviceType: string (required, enum: air, sea, hotel, visa) - Type of service
+    //   - firstName: string (required) - First Name
+    //   - lastName: string (required) - Last Name
+    //   - dob: string (required, date) - Date of Birth
+    //   - destination: string (required) - Destination or specific offer
+    //   - passportScanUrl: string (optional) - URL to the passport scan
+    //   - status: string (required, enum: pending, in-progress, confirmed, action-needed) - Current status
+    //   - adminNotes: string (optional) - Notes from the admin
+    //   - createdAt: timestamp (required) - Submission Date
+    //   - updatedAt: timestamp (optional) - Last Update Date
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == "afafvoyage54@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['uid', 'displayName', 'email', 'role', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'client'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['uid', 'serviceType', 'firstName', 'lastName', 'dob', 'destination', 'status', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.serviceType in ['air', 'sea', 'hotel', 'visa'] &&
+             data.firstName is string && data.firstName.size() > 0 && data.firstName.size() < 100 &&
+             data.lastName is string && data.lastName.size() > 0 && data.lastName.size() < 100 &&
+             data.dob is string &&
+             data.destination is string && data.destination.size() > 0 && data.destination.size() < 500 &&
+             data.status in ['pending', 'in-progress', 'confirmed', 'action-needed'] &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'client' || isAdmin());
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data) && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (isOwner(resource.data.uid) && isValidBooking(request.resource.data) && request.resource.data.status == resource.data.status);
+      allow delete: if isAdmin();
+    }
+  }
+}

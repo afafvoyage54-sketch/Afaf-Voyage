@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and role.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Full Name" },
+        "email": { "type": "string", "format": "email", "description": "User Email" },
+        "role": { "type": "string", "enum": ["admin", "client"], "description": "User Role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account Creation Date" }
+      },
+      "required": ["uid", "displayName", "email", "role", "createdAt"]
+    },
+    "BookingRequest": {
+      "title": "Travel Booking Request",
+      "description": "A travel request submitted by a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Booking ID" },
+        "uid": { "type": "string", "description": "User UID" },
+        "serviceType": { "type": "string", "enum": ["air", "sea", "hotel", "visa"], "description": "Type of service" },
+        "firstName": { "type": "string", "description": "First Name" },
+        "lastName": { "type": "string", "description": "Last Name" },
+        "dob": { "type": "string", "format": "date", "description": "Date of Birth" },
+        "destination": { "type": "string", "description": "Destination or specific offer" },
+        "passportScanUrl": { "type": "string", "description": "URL to the passport scan" },
+        "status": { "type": "string", "enum": ["pending", "in-progress", "confirmed", "action-needed"], "description": "Current status" },
+        "adminNotes": { "type": "string", "description": "Notes from the admin" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Submission Date" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last Update Date" }
+      },
+      "required": ["uid", "serviceType", "firstName", "lastName", "dob", "destination", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{uid}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "bookings/{bookingId}": {
+      "schema": "BookingRequest",
+      "description": "Travel booking requests"
+    }
+  }
+}
