@@ -1479,9 +1479,15 @@ const LoginPage = () => {
       
       toast.success('Connexion réussie !');
       navigate('/');
-    } catch (error) {
-      console.error(error);
-      toast.error('Erreur lors de la connexion.');
+    } catch (error: any) {
+      console.error("Login error:", error);
+      if (error.code === 'auth/unauthorized-domain') {
+        toast.error("Erreur : Ce domaine n'est pas autorisé. Ajoutez-le dans Firebase Console > Authentication > Settings > Authorized domains.", { duration: 8000 });
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        toast.error("La fenêtre de connexion a été fermée.");
+      } else {
+        toast.error(`Erreur lors de la connexion : ${error.message || 'Erreur inconnue'}`);
+      }
     } finally {
       setLoading(false);
     }

@@ -43,7 +43,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Burj Al Arab Jumeirah',
     description: 'L\'hôtel le plus luxueux au monde sur sa propre île.',
     destination: 'Dubaï, Émirats Arabes Unis',
-    imageUrl: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/736x/91/df/2e/91df2ed9c5470e3a6f0856575f53f345.jpg',
     rating: 5,
     startDate: '2026-09-01',
     endDate: '2026-09-07',
@@ -55,7 +55,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Ciragan Palace Kempinski',
     description: 'Un palais ottoman sur les rives du Bosphore.',
     destination: 'Istanbul, Turquie',
-    imageUrl: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/736x/0b/3f/b0/0b3fb0c8016e618bfe93e73c32331cc1.jpg',
     rating: 5,
     startDate: '2026-05-15',
     endDate: '2026-05-20',
@@ -149,7 +149,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Visa Émirats Arabes Unis',
     description: 'Assistance complète pour votre visa touristique ou d\'affaires pour Dubaï et Abu Dhabi.',
     destination: 'United Arab Emirates',
-    imageUrl: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/736x/91/df/2e/91df2ed9c5470e3a6f0856575f53f345.jpg',
     amenities: ['Traitement 48h', 'Assurance incluse', 'Support 24/7']
   },
   {
@@ -158,7 +158,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Visa Turquie',
     description: 'E-visa ou visa classique pour vos vacances ou voyages d\'affaires en Turquie.',
     destination: 'Turkey',
-    imageUrl: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/736x/0b/3f/b0/0b3fb0c8016e618bfe93e73c32331cc1.jpg',
     amenities: ['E-visa rapide', 'Assistance dossier', 'Paiement sécurisé']
   },
   {
@@ -167,7 +167,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Visa Égypte',
     description: 'Explorez les pyramides avec notre service d\'assistance visa rapide.',
     destination: 'Egypt',
-    imageUrl: 'https://images.unsplash.com/photo-1572252009286-268acec5ca0a?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/736x/ea/77/e6/ea77e6b28d3c330c8da3e2c565cb3da3.jpg',
     amenities: ['Visa à l\'arrivée', 'Conseils voyage', 'Support WhatsApp']
   },
   {
@@ -185,7 +185,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Évasion Malaisie',
     description: 'Un voyage inoubliable entre modernité à KL et plages paradisiaques à Langkawi.',
     destination: 'Malaisie',
-    imageUrl: 'https://images.unsplash.com/photo-1596422846543-75c6fc18a5ce?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/1200x/2e/1a/93/2e1a93a0250c4a768b82e708b53e7364.jpg',
     startDate: '2026-08-05',
     endDate: '2026-08-15',
     amenities: ['Vols inclus', 'Hôtels 4*', 'Petit-déjeuner', 'Excursions']
@@ -196,7 +196,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'AZERBAÏDJAN – BAKU & GABALA',
     description: 'Séjour 8 jours / 7 nuits – Départ d’Alger. Découvrez la perle du Caucase.',
     destination: 'Azerbaïdjan',
-    imageUrl: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/736x/be/75/47/be7547c4ec579eccfb0d474defeca23c.jpg',
     amenities: ['8 jours / 7 nuits', 'Départ d’Alger', 'Baku & Gabala', 'Hôtels 4*']
   },
   {
@@ -205,7 +205,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Tunisie (Sousse & Hammamet)',
     description: '7 nuits / 8 jours (départ Oran). Profitez des plages dorées de la Tunisie.',
     destination: 'Tunisie',
-    imageUrl: 'https://images.unsplash.com/photo-1534008843780-f0188bf037f1?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/1200x/d4/90/ab/d490abe887f165431e9222eb69f5fd1a.jpg',
     amenities: ['7 nuits / 8 jours', 'Départ Oran', 'Sousse & Hammamet', 'Demi-pension']
   },
   {
@@ -214,7 +214,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Égypte (Le Caire & Sharm El Sheikh)',
     description: '8 jours / 7 nuits (départ Alger). Un mélange parfait d\'histoire et de détente.',
     destination: 'Égypte',
-    imageUrl: 'https://images.unsplash.com/photo-1572252009286-268acec5ca0a?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/736x/ea/77/e6/ea77e6b28d3c330c8da3e2c565cb3da3.jpg',
     amenities: ['8 jours / 7 nuits', 'Départ Alger', 'Le Caire & Sharm', 'Vols inclus']
   },
   {
@@ -223,17 +223,17 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Malaisie (Kuala Lumpur & Langkawi)',
     description: '10 nuits / 12 jours depuis Alger. Une évasion tropicale complète.',
     destination: 'Malaisie',
-    imageUrl: 'https://images.unsplash.com/photo-1624555130581-1d9cca783bc0?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/1200x/2e/1a/93/2e1a93a0250c4a768b82e708b53e7364.jpg',
     amenities: ['10 nuits / 12 jours', 'Départ Alger', 'KL & Langkawi', 'Hôtels 4*/5*']
   },
   {
     id: 'trip-dubai-doha',
     type: 'organized-trip',
-    title: 'Dubaï & Doha',
-    description: 'Découvrez le luxe et la modernité des deux perles du Golfe.',
-    destination: 'Dubaï & Doha',
-    imageUrl: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&q=80&w=800',
-    amenities: ['Combiné 2 pays', 'Vols inclus', 'Hôtels de luxe', 'Visites incluses']
+    title: 'Dubaï',
+    description: 'Découvrez le luxe et la modernité de la perle des Émirats.',
+    destination: 'Dubaï',
+    imageUrl: 'https://i.pinimg.com/736x/91/df/2e/91df2ed9c5470e3a6f0856575f53f345.jpg',
+    amenities: ['Vols inclus', 'Hôtels de luxe', 'Visites incluses', 'Transferts']
   },
   {
     id: 'trip-qatar',
@@ -241,7 +241,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Qatar',
     description: 'Une destination fascinante alliant tradition et futurisme.',
     destination: 'Qatar',
-    imageUrl: 'https://images.unsplash.com/photo-1593950315186-76a92975b60c?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/1200x/b0/f6/85/b0f6851b1831e6c3a9938d7be68ef71f.jpg',
     amenities: ['Doha City Tour', 'Désert Safari', 'Hôtels 5*', 'Transferts']
   },
   {
