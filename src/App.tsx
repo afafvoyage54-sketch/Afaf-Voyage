@@ -48,6 +48,8 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -1451,8 +1453,12 @@ const AdminDashboardPage = ({ profile }: { profile: UserProfile | null }) => {
 const LoginPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
 
-  const handleLogin = async () => {
+  const handleGoogleLogin = async () => {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
@@ -1481,14 +1487,65 @@ const LoginPage = () => {
       navigate('/');
     } catch (error) {
       console.error(error);
-      toast.error('Erreur lors de la connexion.');
+      toast.error('Erreur lors de la connexion avec Google.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password || (isSignUp && !name)) {
+      toast.error('Veuillez remplir tous les champs.');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      if (isSignUp) {
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        const user = result.user;
+        const isAdminEmail = user.email === 'afafvoyage54@gmail.com';
+        
+        const profile: UserProfile = {
+          uid: user.uid,
+          displayName: name,
+          email: user.email || '',
+          role: isAdminEmail ? 'admin' : 'client',
+          createdAt: Timestamp.now(),
+        };
+        await setDoc(doc(db, 'users', user.uid), profile);
+        toast.success('Compte créé avec succès !');
+      } else {
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        const user = result.user;
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const isAdminEmail = user.email === 'afafvoyage54@gmail.com';
+        
+        if (isAdminEmail && userDoc.exists() && userDoc.data()?.role !== 'admin') {
+          await updateDoc(doc(db, 'users', user.uid), { role: 'admin' });
+        }
+        toast.success('Connexion réussie !');
+      }
+      navigate('/');
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/email-already-in-use') {
+        toast.error('Cet email est déjà utilisé.');
+      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+        toast.error('Email ou mot de passe incorrect.');
+      } else if (error.code === 'auth/weak-password') {
+        toast.error('Le mot de passe doit contenir au moins 6 caractères.');
+      } else {
+        toast.error(isSignUp ? 'Erreur lors de la création du compte.' : 'Erreur lors de la connexion.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center px-4">
+    <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1504,17 +1561,71 @@ const LoginPage = () => {
           }}
         />
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">Bienvenue</h1>
-          <p className="text-gray-500">Connectez-vous pour accéder à vos services de voyage.</p>
+          <h1 className="text-3xl font-bold text-gray-900">{isSignUp ? 'Créer un compte' : 'Bienvenue'}</h1>
+          <p className="text-gray-500">
+            {isSignUp ? 'Inscrivez-vous pour commencer.' : 'Connectez-vous pour accéder à vos services de voyage.'}
+          </p>
         </div>
+
+        <form onSubmit={handleEmailAuth} className="space-y-4">
+          {isSignUp && (
+            <input
+              type="text"
+              placeholder="Nom complet"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
+            />
+          )}
+          <input
+            type="email"
+            placeholder="Adresse email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
+          />
+          <input
+            type="password"
+            placeholder="Mot de passe"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-primary text-white py-4 rounded-xl font-bold hover:bg-secondary transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+          >
+            {isSignUp ? "S'inscrire" : "Se connecter"}
+          </button>
+        </form>
+
+        <div className="relative flex items-center py-4">
+          <div className="flex-grow border-t border-gray-200"></div>
+          <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-bold">OU</span>
+          <div className="flex-grow border-t border-gray-200"></div>
+        </div>
+
         <button
-          onClick={handleLogin}
+          onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-4 bg-white border border-gray-200 py-4 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+          type="button"
+          className="w-full flex items-center justify-center gap-4 bg-white border border-gray-200 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm hover:shadow-md disabled:opacity-50"
         >
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
           Continuer avec Google
         </button>
+
+        <p className="text-sm text-gray-500 mt-6">
+          {isSignUp ? 'Déjà un compte ?' : "Vous n'avez pas de compte ?"}
+          <button 
+            type="button"
+            onClick={() => setIsSignUp(!isSignUp)} 
+            className="ml-1 text-primary font-bold hover:underline"
+          >
+            {isSignUp ? 'Se connecter' : "S'inscrire"}
+          </button>
+        </p>
       </motion.div>
     </div>
   );
