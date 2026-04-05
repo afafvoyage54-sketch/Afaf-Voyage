@@ -95,15 +95,15 @@ const Navbar = ({ user, profile }: { user: FirebaseUser | null, profile: UserPro
         <div className="flex justify-between h-20">
           <div className="flex items-center">
             <Link to="/" className="flex items-center">
-              <img 
-                src="/logo.png" 
-                alt="Afaf Voyages" 
-                className="h-16 w-auto" 
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://placehold.co/200x80/1B365D/FFFFFF?text=Afaf+Voyages';
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-black text-xl">
+                  A
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-black text-xl leading-none text-gray-900 tracking-tighter uppercase">Afaf</span>
+                  <span className="text-[10px] font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
+                </div>
+              </div>
             </Link>
           </div>
 
@@ -214,16 +214,14 @@ const Footer = () => (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="space-y-6">
-          <div className="flex items-center">
-            <img 
-              src="/logo.png" 
-              alt="Afaf Voyages" 
-              className="h-12 w-auto brightness-0 invert" 
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://placehold.co/200x80/1B365D/FFFFFF?text=Afaf+Voyages';
-              }}
-            />
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-primary font-black text-xl">
+              A
+            </div>
+            <div className="flex flex-col">
+              <span className="font-black text-xl leading-none text-white tracking-tighter uppercase">Afaf</span>
+              <span className="text-[10px] font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
+            </div>
           </div>
           <p className="text-gray-400 text-sm leading-relaxed">
             Votre partenaire de confiance pour tous vos besoins de voyage : Air, Mer, Hôtel et Visas.
@@ -264,7 +262,7 @@ const Footer = () => (
               <Facebook size={20} className="group-hover:scale-110 transition-transform" />
             </a>
             <a 
-              href="#" 
+              href="https://www.instagram.com/afafvoyages/?hl=fr" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-accent transition-all group"
@@ -499,7 +497,7 @@ const HomePage = () => (
         <div className="relative group">
           <div className="aspect-[4/5] rounded-[60px] overflow-hidden shadow-[0_50px_100px_rgba(0,0,0,0.1)]">
             <img 
-              src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=1974" 
+              src="https://images.pexels.com/photos/19068968/pexels-photo-19068968.jpeg" 
               alt="Beach" 
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
               referrerPolicy="no-referrer"
@@ -1500,15 +1498,17 @@ const LoginPage = () => {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full bg-white p-10 rounded-3xl shadow-2xl border border-gray-100 text-center space-y-8"
       >
-        <img 
-          src="/logo.png" 
-          alt="Afaf Voyages" 
-          className="h-24 w-auto mx-auto mb-4" 
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = 'https://placehold.co/200x80/1B365D/FFFFFF?text=Afaf+Voyages';
-          }}
-        />
+        <div className="flex items-center justify-center mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white font-black text-2xl">
+              A
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="font-black text-2xl leading-none text-gray-900 tracking-tighter uppercase">Afaf</span>
+              <span className="text-xs font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
+            </div>
+          </div>
+        </div>
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-gray-900">Bienvenue</h1>
           <p className="text-gray-500">Connectez-vous pour accéder à vos services de voyage.</p>

@@ -67,7 +67,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Mandarin Oriental KL',
     description: 'Vue spectaculaire sur les tours Petronas.',
     destination: 'Kuala Lumpur, Malaisie',
-    imageUrl: 'https://images.unsplash.com/photo-1596422846543-75c6fc18a5ce?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.pexels.com/photos/13672220/pexels-photo-13672220.jpeg',
     rating: 5,
     startDate: '2026-11-10',
     endDate: '2026-11-17',
@@ -250,7 +250,7 @@ export const TRAVEL_OFFERS: TravelOffer[] = [
     title: 'Oman',
     description: 'Découvrez la beauté sauvage et l\'authenticité du Sultanat d\'Oman.',
     destination: 'Oman',
-    imageUrl: 'https://images.unsplash.com/photo-1544161442-e3db36c4f67c?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://i.pinimg.com/736x/02/88/6b/02886b30792b999a5da9381ee7fede13.jpg',
     amenities: ['Mascate', 'Wadis & Désert', 'Nature préservée', 'Guide local']
   },
   {
