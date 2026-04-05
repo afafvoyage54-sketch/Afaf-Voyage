@@ -814,11 +814,54 @@ const ServicesPage = () => {
   );
 };
 
+const compressImage = async (file: File): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Compression failed'));
+        }, 'image/jpeg', 0.7);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
   const { type } = useParams<{ type: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
   const initialDestination = searchParams.get('dest') || '';
@@ -841,18 +884,34 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
     }
 
     setLoading(true);
+    setLoadingText('Préparation des données...');
     const formData = new FormData(e.currentTarget);
     
     try {
       let passportUrl = '';
       if (file) {
+        setLoadingText('Optimisation de l\'image...');
+        let fileToUpload: File | Blob = file;
+        
+        // Compress image if it's larger than 500KB
+        if (file.type.startsWith('image/') && file.size > 500 * 1024) {
+          try {
+            fileToUpload = await compressImage(file);
+          } catch (err) {
+            console.warn("Compression failed, uploading original", err);
+          }
+        }
+
+        setLoadingText('Envoi du document...');
         const storageRef = ref(storage, `passports/${user.uid}/${Date.now()}_${file.name}`);
-        const uploadResult = await uploadBytes(storageRef, file);
+        const uploadResult = await uploadBytes(storageRef, fileToUpload);
         passportUrl = await getDownloadURL(uploadResult.ref);
       }
 
+      setLoadingText('Enregistrement de la demande...');
       const bookingData = {
         uid: user.uid,
+        email: user.email,
         serviceType: type as ServiceType,
         firstName: formData.get('firstName'),
         lastName: formData.get('lastName'),
@@ -871,6 +930,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
       toast.error('Une erreur est survenue lors de la soumission.');
     } finally {
       setLoading(false);
+      setLoadingText('');
     }
   };
 
@@ -1028,7 +1088,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
             {loading ? (
               <>
                 <Loader2 className="animate-spin" size={24} />
-                Envoi en cours...
+                {loadingText || 'Envoi en cours...'}
               </>
             ) : (
               'Soumettre ma demande'
