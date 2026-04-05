@@ -39,7 +39,8 @@ import {
   Moon,
   ArrowUpDown,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
@@ -123,10 +124,19 @@ const Navbar = ({ user, profile }: { user: FirebaseUser | null, profile: UserPro
             ))}
             {user ? (
               <div className="flex items-center gap-4 pl-4 border-l border-gray-100">
-                <div className="text-right hidden lg:block">
-                  <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
-                  <p className="text-[10px] text-accent font-black uppercase tracking-wider">{profile?.role}</p>
-                </div>
+                <Link to="/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border-2 border-white shadow-sm flex items-center justify-center">
+                    {profile?.avatarUrl ? (
+                      <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={20} className="text-gray-400" />
+                    )}
+                  </div>
+                  <div className="text-left hidden lg:block">
+                    <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
+                    <p className="text-[10px] text-accent font-black uppercase tracking-wider">{profile?.role}</p>
+                  </div>
+                </Link>
                 <button
                   onClick={() => signOut(auth)}
                   className="p-2 text-gray-400 hover:text-accent transition-colors"
@@ -1259,6 +1269,42 @@ const AdminDashboardPage = ({ profile }: { profile: UserProfile | null }) => {
     }
   };
 
+  const exportToCSV = () => {
+    if (filteredAndSortedBookings.length === 0) {
+      toast.error('Aucune donnée à exporter');
+      return;
+    }
+
+    const headers = ['ID', 'Date de création', 'Client', 'Email', 'Service', 'Destination', 'Statut'];
+    
+    const escapeCSV = (str: string) => `"${str.replace(/"/g, '""')}"`;
+
+    const csvRows = filteredAndSortedBookings.map(b => {
+      const date = b.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || '';
+      const client = `${b.firstName} ${b.lastName}`;
+      return [
+        b.id,
+        date,
+        escapeCSV(client),
+        escapeCSV(b.email),
+        b.serviceType,
+        escapeCSV(b.destination),
+        b.status
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `reservations_afaf_voyages_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (!profile || profile.role !== 'admin') return null;
 
   return (
@@ -1268,8 +1314,17 @@ const AdminDashboardPage = ({ profile }: { profile: UserProfile | null }) => {
           <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Tableau de Bord Admin</h1>
           <p className="text-gray-500">Gérez les demandes de réservation entrantes.</p>
         </div>
-        <div className="bg-primary/10 text-primary px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border border-primary/20">
-          {bookings.length} Demandes au total
+        <div className="flex items-center gap-4">
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-6 py-3 rounded-2xl text-sm font-bold hover:bg-gray-50 transition-all shadow-sm"
+          >
+            <Download size={18} />
+            Exporter CSV
+          </button>
+          <div className="bg-primary/10 text-primary px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border border-primary/20">
+            {bookings.length} Demandes au total
+          </div>
         </div>
       </div>
 
@@ -1446,6 +1501,96 @@ const AdminDashboardPage = ({ profile }: { profile: UserProfile | null }) => {
   );
 };
 
+const ProfilePage = ({ user, profile }: { user: FirebaseUser | null, profile: UserProfile | null }) => {
+  const [uploading, setUploading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl || null);
+  const inputFileRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return toast.error("Vous devez être connecté");
+    if (!inputFileRef.current?.files?.length) return toast.error("Aucun fichier sélectionné");
+
+    const file = inputFileRef.current.files[0];
+    setUploading(true);
+
+    try {
+      const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}_${file.name}`);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(uploadResult.ref);
+
+      await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url });
+      setAvatarUrl(url);
+      toast.success("Avatar mis à jour avec succès !");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du téléchargement");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <p className="text-gray-500">Veuillez vous connecter pour accéder à votre profil.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-16">
+      <div className="bg-white p-10 rounded-[40px] shadow-xl border border-gray-50 space-y-8">
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase">Mon Profil</h1>
+          <p className="text-gray-500 font-medium">Gérez vos informations personnelles et votre avatar.</p>
+        </div>
+
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg flex items-center justify-center">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <User size={48} className="text-gray-300" />
+            )}
+          </div>
+
+          <form onSubmit={handleUpload} className="w-full max-w-sm space-y-4">
+            <div className="relative">
+              <input 
+                name="file" 
+                ref={inputFileRef} 
+                type="file" 
+                accept="image/jpeg, image/png, image/webp" 
+                required 
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
+              />
+            </div>
+            <button 
+              type="submit" 
+              disabled={uploading}
+              className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-secondary transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {uploading ? <Loader2 size={20} className="animate-spin" /> : 'Mettre à jour l\'avatar'}
+            </button>
+          </form>
+        </div>
+
+        <div className="pt-8 border-t border-gray-100 space-y-4">
+          <div className="bg-gray-50 p-4 rounded-2xl">
+            <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Nom d'utilisateur</p>
+            <p className="font-bold text-gray-900">{profile?.displayName}</p>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-2xl">
+            <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Email</p>
+            <p className="font-bold text-gray-900">{profile?.email}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -1585,6 +1730,7 @@ export default function App() {
             <Route path="/track" element={<TrackRequestPage user={user} />} />
             <Route path="/admin" element={<AdminDashboardPage profile={profile} />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/profile" element={<ProfilePage user={user} profile={profile} />} />
           </Routes>
         </main>
 
