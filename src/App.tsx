@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -73,6 +73,7 @@ import { UserProfile, BookingRequest, ServiceType, BookingStatus, TravelOffer } 
 import Chatbot from './components/Chatbot';
 import { TRAVEL_OFFERS, FLIGHT_ROUTES, AIRLINE_CAMPAIGNS, SEA_CAMPAIGNS } from './constants';
 import { useSearchParams } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 
 // --- Components ---
 
@@ -1820,6 +1821,7 @@ export default function App() {
 
         <Chatbot />
         <Toaster position="top-center" richColors />
+        <Analytics />
       </div>
     </Router>
   );
