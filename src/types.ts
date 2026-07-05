@@ -8,6 +8,7 @@ export interface UserProfile {
   email: string;
   role: UserRole;
   createdAt: any; // Firestore Timestamp
+  avatarUrl?: string;
 }
 
 export interface BookingRequest {

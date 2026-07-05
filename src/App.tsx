@@ -39,7 +39,8 @@ import {
   Moon,
   ArrowUpDown,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
@@ -97,15 +98,15 @@ const Navbar = ({ user, profile }: { user: FirebaseUser | null, profile: UserPro
         <div className="flex justify-between h-20">
           <div className="flex items-center">
             <Link to="/" className="flex items-center">
-              <img 
-                src="/logo.png" 
-                alt="Afaf Voyages" 
-                className="h-16 w-auto" 
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://placehold.co/200x80/1B365D/FFFFFF?text=Afaf+Voyages';
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-black text-xl">
+                  A
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-black text-xl leading-none text-gray-900 tracking-tighter uppercase">Afaf</span>
+                  <span className="text-[10px] font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
+                </div>
+              </div>
             </Link>
           </div>
 
@@ -125,10 +126,19 @@ const Navbar = ({ user, profile }: { user: FirebaseUser | null, profile: UserPro
             ))}
             {user ? (
               <div className="flex items-center gap-4 pl-4 border-l border-gray-100">
-                <div className="text-right hidden lg:block">
-                  <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
-                  <p className="text-[10px] text-accent font-black uppercase tracking-wider">{profile?.role}</p>
-                </div>
+                <Link to="/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border-2 border-white shadow-sm flex items-center justify-center">
+                    {profile?.avatarUrl ? (
+                      <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={20} className="text-gray-400" />
+                    )}
+                  </div>
+                  <div className="text-left hidden lg:block">
+                    <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
+                    <p className="text-[10px] text-accent font-black uppercase tracking-wider">{profile?.role}</p>
+                  </div>
+                </Link>
                 <button
                   onClick={() => signOut(auth)}
                   className="p-2 text-gray-400 hover:text-accent transition-colors"
@@ -216,16 +226,14 @@ const Footer = () => (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="space-y-6">
-          <div className="flex items-center">
-            <img 
-              src="/logo.png" 
-              alt="Afaf Voyages" 
-              className="h-12 w-auto brightness-0 invert" 
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://placehold.co/200x80/1B365D/FFFFFF?text=Afaf+Voyages';
-              }}
-            />
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-primary font-black text-xl">
+              A
+            </div>
+            <div className="flex flex-col">
+              <span className="font-black text-xl leading-none text-white tracking-tighter uppercase">Afaf</span>
+              <span className="text-[10px] font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
+            </div>
           </div>
           <p className="text-gray-400 text-sm leading-relaxed">
             Votre partenaire de confiance pour tous vos besoins de voyage : Air, Mer, Hôtel et Visas.
@@ -266,7 +274,7 @@ const Footer = () => (
               <Facebook size={20} className="group-hover:scale-110 transition-transform" />
             </a>
             <a 
-              href="#" 
+              href="https://www.instagram.com/afafvoyages/?hl=fr" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-accent transition-all group"
@@ -501,7 +509,7 @@ const HomePage = () => (
         <div className="relative group">
           <div className="aspect-[4/5] rounded-[60px] overflow-hidden shadow-[0_50px_100px_rgba(0,0,0,0.1)]">
             <img 
-              src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=1974" 
+              src="https://images.pexels.com/photos/19068968/pexels-photo-19068968.jpeg" 
               alt="Beach" 
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
               referrerPolicy="no-referrer"
@@ -808,11 +816,54 @@ const ServicesPage = () => {
   );
 };
 
+const compressImage = async (file: File): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Compression failed'));
+        }, 'image/jpeg', 0.7);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
   const { type } = useParams<{ type: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
   const initialDestination = searchParams.get('dest') || '';
@@ -835,18 +886,34 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
     }
 
     setLoading(true);
+    setLoadingText('Préparation des données...');
     const formData = new FormData(e.currentTarget);
     
     try {
       let passportUrl = '';
       if (file) {
+        setLoadingText('Optimisation de l\'image...');
+        let fileToUpload: File | Blob = file;
+        
+        // Compress image if it's larger than 500KB
+        if (file.type.startsWith('image/') && file.size > 500 * 1024) {
+          try {
+            fileToUpload = await compressImage(file);
+          } catch (err) {
+            console.warn("Compression failed, uploading original", err);
+          }
+        }
+
+        setLoadingText('Envoi du document...');
         const storageRef = ref(storage, `passports/${user.uid}/${Date.now()}_${file.name}`);
-        const uploadResult = await uploadBytes(storageRef, file);
+        const uploadResult = await uploadBytes(storageRef, fileToUpload);
         passportUrl = await getDownloadURL(uploadResult.ref);
       }
 
+      setLoadingText('Enregistrement de la demande...');
       const bookingData = {
         uid: user.uid,
+        email: user.email,
         serviceType: type as ServiceType,
         firstName: formData.get('firstName'),
         lastName: formData.get('lastName'),
@@ -865,6 +932,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
       toast.error('Une erreur est survenue lors de la soumission.');
     } finally {
       setLoading(false);
+      setLoadingText('');
     }
   };
 
@@ -1022,7 +1090,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
             {loading ? (
               <>
                 <Loader2 className="animate-spin" size={24} />
-                Envoi en cours...
+                {loadingText || 'Envoi en cours...'}
               </>
             ) : (
               'Soumettre ma demande'
@@ -1263,6 +1331,42 @@ const AdminDashboardPage = ({ profile }: { profile: UserProfile | null }) => {
     }
   };
 
+  const exportToCSV = () => {
+    if (filteredAndSortedBookings.length === 0) {
+      toast.error('Aucune donnée à exporter');
+      return;
+    }
+
+    const headers = ['ID', 'Date de création', 'Client', 'Email', 'Service', 'Destination', 'Statut'];
+    
+    const escapeCSV = (str: string) => `"${str.replace(/"/g, '""')}"`;
+
+    const csvRows = filteredAndSortedBookings.map(b => {
+      const date = b.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || '';
+      const client = `${b.firstName} ${b.lastName}`;
+      return [
+        b.id,
+        date,
+        escapeCSV(client),
+        escapeCSV(b.email),
+        b.serviceType,
+        escapeCSV(b.destination),
+        b.status
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `reservations_afaf_voyages_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (!profile || profile.role !== 'admin') return null;
 
   return (
@@ -1272,8 +1376,17 @@ const AdminDashboardPage = ({ profile }: { profile: UserProfile | null }) => {
           <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Tableau de Bord Admin</h1>
           <p className="text-gray-500">Gérez les demandes de réservation entrantes.</p>
         </div>
-        <div className="bg-primary/10 text-primary px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border border-primary/20">
-          {bookings.length} Demandes au total
+        <div className="flex items-center gap-4">
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-6 py-3 rounded-2xl text-sm font-bold hover:bg-gray-50 transition-all shadow-sm"
+          >
+            <Download size={18} />
+            Exporter CSV
+          </button>
+          <div className="bg-primary/10 text-primary px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border border-primary/20">
+            {bookings.length} Demandes au total
+          </div>
         </div>
       </div>
 
@@ -1450,6 +1563,96 @@ const AdminDashboardPage = ({ profile }: { profile: UserProfile | null }) => {
   );
 };
 
+const ProfilePage = ({ user, profile }: { user: FirebaseUser | null, profile: UserProfile | null }) => {
+  const [uploading, setUploading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl || null);
+  const inputFileRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return toast.error("Vous devez être connecté");
+    if (!inputFileRef.current?.files?.length) return toast.error("Aucun fichier sélectionné");
+
+    const file = inputFileRef.current.files[0];
+    setUploading(true);
+
+    try {
+      const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}_${file.name}`);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(uploadResult.ref);
+
+      await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url });
+      setAvatarUrl(url);
+      toast.success("Avatar mis à jour avec succès !");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du téléchargement");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <p className="text-gray-500">Veuillez vous connecter pour accéder à votre profil.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-16">
+      <div className="bg-white p-10 rounded-[40px] shadow-xl border border-gray-50 space-y-8">
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase">Mon Profil</h1>
+          <p className="text-gray-500 font-medium">Gérez vos informations personnelles et votre avatar.</p>
+        </div>
+
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg flex items-center justify-center">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <User size={48} className="text-gray-300" />
+            )}
+          </div>
+
+          <form onSubmit={handleUpload} className="w-full max-w-sm space-y-4">
+            <div className="relative">
+              <input 
+                name="file" 
+                ref={inputFileRef} 
+                type="file" 
+                accept="image/jpeg, image/png, image/webp" 
+                required 
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
+              />
+            </div>
+            <button 
+              type="submit" 
+              disabled={uploading}
+              className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-secondary transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {uploading ? <Loader2 size={20} className="animate-spin" /> : 'Mettre à jour l\'avatar'}
+            </button>
+          </form>
+        </div>
+
+        <div className="pt-8 border-t border-gray-100 space-y-4">
+          <div className="bg-gray-50 p-4 rounded-2xl">
+            <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Nom d'utilisateur</p>
+            <p className="font-bold text-gray-900">{profile?.displayName}</p>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-2xl">
+            <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Email</p>
+            <p className="font-bold text-gray-900">{profile?.email}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -1551,15 +1754,17 @@ const LoginPage = () => {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full bg-white p-10 rounded-3xl shadow-2xl border border-gray-100 text-center space-y-8"
       >
-        <img 
-          src="/logo.png" 
-          alt="Afaf Voyages" 
-          className="h-24 w-auto mx-auto mb-4" 
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = 'https://placehold.co/200x80/1B365D/FFFFFF?text=Afaf+Voyages';
-          }}
-        />
+        <div className="flex items-center justify-center mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white font-black text-2xl">
+              A
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="font-black text-2xl leading-none text-gray-900 tracking-tighter uppercase">Afaf</span>
+              <span className="text-xs font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
+            </div>
+          </div>
+        </div>
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-gray-900">{isSignUp ? 'Créer un compte' : 'Bienvenue'}</h1>
           <p className="text-gray-500">
@@ -1677,6 +1882,7 @@ export default function App() {
     );
   }
 
+
   return (
     <Router>
       <div className="min-h-screen bg-white flex flex-col font-sans selection:bg-primary/10 selection:text-primary">
@@ -1690,6 +1896,7 @@ export default function App() {
             <Route path="/track" element={<TrackRequestPage user={user} />} />
             <Route path="/admin" element={<AdminDashboardPage profile={profile} />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/profile" element={<ProfilePage user={user} profile={profile} />} />
           </Routes>
         </main>
 

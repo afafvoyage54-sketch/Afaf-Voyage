@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { MessageSquare, X, Send, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
@@ -31,9 +31,10 @@ export default function Chatbot() {
 
     try {
       const response = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         config: {
           systemInstruction: "You are the virtual assistant for Agence Afaf Voyages, a travel agency specializing in Air, Sea, Hotel, and Visa services. Be professional, helpful, and polite. Answer in French by default, but adapt to the user's language if needed. Provide information about travel services and guide users on how to submit requests through the website.",
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
         },
         contents: [
           ...messages.map(m => ({
