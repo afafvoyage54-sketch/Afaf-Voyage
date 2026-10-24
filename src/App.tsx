@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -49,8 +49,6 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -69,12 +67,18 @@ import {
   arrayUnion,
   serverTimestamp
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage } from './firebase';
-import { UserProfile, BookingRequest, ServiceType, BookingStatus, TravelOffer } from './types';
+import { UserProfile, BookingRequest, ServiceType, BookingStatus, TravelOffer, Appointment, ContactMessage, AppointmentStatus } from './types';
 import Chatbot from './components/Chatbot';
 import { TRAVEL_OFFERS, FLIGHT_ROUTES, AIRLINE_CAMPAIGNS, SEA_CAMPAIGNS } from './constants';
 import { useSearchParams } from 'react-router-dom';
+import { NotificationProvider } from './context/NotificationContext';
+import { NotificationBell } from './components/NotificationBell';
+import ContactAppointmentPage from './pages/ContactAppointmentPage';
+import AdminDashboard from './components/AdminDashboard';
+import { getGoogleProvider, setCachedAccessToken, getCachedAccessToken } from './services/googleAuth';
+import { appendSingleBookingToSheet } from './services/googleSheets';
 
 // --- Components ---
 
@@ -85,6 +89,7 @@ const Navbar = ({ user, profile }: { user: FirebaseUser | null, profile: UserPro
   const navLinks = [
     { name: 'Accueil', path: '/', icon: Home },
     { name: 'Services', path: '/services', icon: Plane },
+    { name: 'Rendez-vous & Contact', path: '/contact', icon: Calendar },
     { name: 'Suivre ma demande', path: '/track', icon: Search },
   ];
 
@@ -93,20 +98,16 @@ const Navbar = ({ user, profile }: { user: FirebaseUser | null, profile: UserPro
   }
 
   return (
-    <nav className="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <nav className="bg-white/95 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40 transition-all shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-20">
+        <div className="flex justify-between items-center h-24 md:h-28">
           <div className="flex items-center">
-            <Link to="/" className="flex items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-black text-xl">
-                  A
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-black text-xl leading-none text-gray-900 tracking-tighter uppercase">Afaf</span>
-                  <span className="text-[10px] font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
-                </div>
-              </div>
+            <Link to="/" className="flex items-center group py-2" title="Afaf Voyages - Accueil">
+              <img 
+                src="/assets/aistudio/logo_d451fd9f.png" 
+                alt="Afaf Voyages" 
+                className="h-16 sm:h-20 md:h-24 w-auto object-contain transition-transform group-hover:scale-105 duration-200" 
+              />
             </Link>
           </div>
 
@@ -124,6 +125,7 @@ const Navbar = ({ user, profile }: { user: FirebaseUser | null, profile: UserPro
                 {link.name}
               </Link>
             ))}
+            {user && <NotificationBell />}
             {user ? (
               <div className="flex items-center gap-4 pl-4 border-l border-gray-100">
                 <Link to="/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
@@ -157,8 +159,9 @@ const Navbar = ({ user, profile }: { user: FirebaseUser | null, profile: UserPro
             )}
           </div>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden flex items-center">
+          {/* Mobile menu button & notification bell */}
+          <div className="md:hidden flex items-center gap-2">
+            {user && <NotificationBell />}
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="text-gray-600 p-2"
@@ -226,14 +229,8 @@ const Footer = () => (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="space-y-6">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-primary font-black text-xl">
-              A
-            </div>
-            <div className="flex flex-col">
-              <span className="font-black text-xl leading-none text-white tracking-tighter uppercase">Afaf</span>
-              <span className="text-[10px] font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
-            </div>
+          <div className="bg-white p-4 rounded-3xl inline-block shadow-xl border border-gray-100">
+            <img src="/assets/aistudio/logo_d451fd9f.png" alt="Afaf Voyages" className="h-20 md:h-24 w-auto object-contain" />
           </div>
           <p className="text-gray-400 text-sm leading-relaxed">
             Votre partenaire de confiance pour tous vos besoins de voyage : Air, Mer, Hôtel et Visas.
@@ -248,17 +245,35 @@ const Footer = () => (
             <li><Link to="/booking/hotel" className="hover:text-accent transition-colors">Réservations d'hôtels</Link></li>
             <li><Link to="/booking/visa" className="hover:text-accent transition-colors">Assistance Visa</Link></li>
             <li><Link to="/services?type=organized-trip" className="hover:text-accent transition-colors">Voyages Organisés</Link></li>
-            <li><Link to="/services?type=omra" className="hover:text-accent transition-colors">Omra</Link></li>
+            <li><Link to="/services?type=omra" className="hover:text-accent transition-colors">Omra 2026</Link></li>
+            <li><Link to="/contact" className="hover:text-accent transition-colors font-bold text-white">Prendre Rendez-vous</Link></li>
           </ul>
         </div>
 
         <div>
-          <h4 className="font-bold mb-6 text-white uppercase tracking-widest text-xs">Contact</h4>
+          <h4 className="font-bold mb-6 text-white uppercase tracking-widest text-xs">Contact & Agence</h4>
           <ul className="space-y-4 text-sm text-gray-400">
-            <li className="flex items-center gap-3"><Phone size={16} className="text-accent" /> +213 781 94 96 67</li>
-            <li className="flex items-center gap-3"><Phone size={16} className="text-accent" /> +213 551 37 27 22</li>
-            <li className="flex items-center gap-3"><Mail size={16} className="text-accent" /> afafvoyage@gmail.com</li>
-            <li className="flex items-center gap-3"><MapPin size={16} className="text-accent" /> Trouville (en face Commissariat) Ain El Turk, Oran, Algérie</li>
+            <li className="flex items-center gap-3">
+              <Phone size={16} className="text-accent shrink-0" />
+              <a href="tel:+213781949667" className="hover:text-white transition-colors">+213 781 94 96 67</a>
+            </li>
+            <li className="flex items-center gap-3">
+              <Phone size={16} className="text-accent shrink-0" />
+              <a href="tel:+213551372722" className="hover:text-white transition-colors">+213 551 37 27 22</a>
+            </li>
+            <li className="flex items-center gap-3">
+              <Mail size={16} className="text-accent shrink-0" />
+              <a href="mailto:afafvoyage54@gmail.com" className="hover:text-white transition-colors">afafvoyage54@gmail.com</a>
+            </li>
+            <li className="flex items-start gap-3">
+              <MapPin size={16} className="text-accent shrink-0 mt-1" />
+              <span>Trouville (en face Commissariat) Ain El Turk, Oran, Algérie</span>
+            </li>
+            <li className="pt-1">
+              <Link to="/contact" className="inline-flex items-center gap-1.5 text-xs font-bold text-accent hover:underline">
+                <span>Prendre RDV & Horaires détaillés &rarr;</span>
+              </Link>
+            </li>
           </ul>
         </div>
 
@@ -318,7 +333,7 @@ const HomePage = () => (
           className="space-y-12"
         >
           <div className="inline-flex items-center gap-3 bg-white/5 backdrop-blur-xl border border-white/10 px-6 py-2.5 rounded-full">
-            <span className="w-2 h-2 bg-accent rounded-full animate-pulse shadow-[0_0_10px_rgba(243,112,33,0.8)]"></span>
+            <span className="w-2 h-2 bg-accent rounded-full animate-pulse shadow-[0_0_14px_rgba(234,102,36,0.9)]"></span>
             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-300">Explorez le monde avec Afaf</span>
           </div>
           
@@ -327,7 +342,7 @@ const HomePage = () => (
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.8 }}
-              className="text-[15vw] md:text-[12vw] font-black leading-[0.85] tracking-tighter uppercase italic text-white/10 absolute -top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none whitespace-nowrap"
+              className="text-[15vw] md:text-[12vw] font-['Cinzel',serif] font-black leading-[0.85] tracking-[0.15em] uppercase not-italic text-white/[0.07] absolute -top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none whitespace-nowrap pointer-events-none"
             >
               Voyages
             </motion.h1>
@@ -335,10 +350,10 @@ const HomePage = () => (
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5, duration: 0.8 }}
-              className="text-7xl md:text-9xl font-black leading-[0.9] tracking-tighter relative"
+              className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-['Cinzel',serif] font-bold leading-[0.95] tracking-tight relative text-white drop-shadow-sm"
             >
               L'ART DE <br />
-              <span className="text-accent">VOYAGER</span>
+              <span className="text-accent font-['Cinzel',serif] font-black tracking-[0.14em] inline-block drop-shadow-[0_4px_30px_rgba(234,102,36,0.35)]">VOYAGER</span>
             </motion.h2>
           </div>
 
@@ -360,7 +375,7 @@ const HomePage = () => (
           >
             <Link 
               to="/services" 
-              className="group bg-primary text-white px-12 py-6 rounded-2xl font-black uppercase tracking-widest hover:bg-secondary transition-all shadow-[0_20px_50px_rgba(27,54,93,0.3)] flex items-center gap-4"
+              className="group bg-primary text-white px-12 py-6 rounded-2xl font-black uppercase tracking-widest hover:bg-secondary transition-all shadow-[0_20px_50px_rgba(48,90,162,0.35)] flex items-center gap-4"
             >
               Découvrir nos offres <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </Link>
@@ -433,7 +448,7 @@ const HomePage = () => (
                     className="max-h-full max-w-full object-contain grayscale group-hover:grayscale-0 transition-all" 
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = `https://placehold.co/400x200/1B365D/FFFFFF?text=${airline.name}`;
+                      (e.target as HTMLImageElement).src = `https://placehold.co/400x200/305AA2/FFFFFF?text=${airline.name}`;
                     }}
                   />
                 </div>
@@ -463,7 +478,7 @@ const HomePage = () => (
                     className="max-h-full max-w-full object-contain grayscale group-hover:grayscale-0 transition-all" 
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = `https://placehold.co/400x200/1B365D/FFFFFF?text=${sea.name}`;
+                      (e.target as HTMLImageElement).src = `https://placehold.co/400x200/305AA2/FFFFFF?text=${sea.name}`;
                     }}
                   />
                 </div>
@@ -525,6 +540,61 @@ const HomePage = () => (
               </div>
               <p className="font-black text-gray-900 text-lg leading-tight uppercase tracking-tight">Garantie de Sérénité</p>
               <p className="text-xs text-gray-400 font-medium leading-relaxed">Nous gérons les imprévus pour que vous puissiez profiter de l'essentiel.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* Section Rendez-vous & Assistance Directe */}
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-gradient-to-r from-[#1E3A8A] via-[#305AA2] to-[#305AA2] rounded-[48px] p-8 sm:p-14 text-white relative overflow-hidden shadow-2xl">
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="lg:col-span-8 space-y-4">
+            <span className="inline-block px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-bold uppercase tracking-wider text-[#EA6624]">
+              Service Client & Agence Physique
+            </span>
+            <h3 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight">
+              Prenez rendez-vous en agence ou contactez nos conseillers en direct
+            </h3>
+            <p className="text-blue-100 text-sm sm:text-base leading-relaxed max-w-2xl">
+              Accueil personnalisé à Ain El Turk (Trouville, Oran) pour vos visas, forfaits Omra 2026, billets d'avion et voyages sur-mesure. Assistance immédiate sur WhatsApp 7j/7.
+            </p>
+            <div className="flex flex-wrap gap-4 pt-2">
+              <Link
+                to="/contact"
+                className="bg-[#EA6624] hover:bg-orange-600 text-white font-bold px-8 py-4 rounded-2xl text-sm transition-all shadow-lg shadow-orange-500/20 flex items-center gap-2"
+              >
+                <Calendar size={18} />
+                <span>Prendre un Rendez-vous</span>
+              </Link>
+              <a
+                href="https://wa.me/213781949667?text=Bonjour%20Afaf%20Voyages,%20je%20souhaite%20une%20assistance%20directe"
+                target="_blank"
+                rel="noreferrer"
+                className="bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold px-8 py-4 rounded-2xl text-sm transition-all flex items-center gap-2"
+              >
+                <MessageCircle size={18} />
+                <span>WhatsApp Direct (+213 781 94 96 67)</span>
+              </a>
+            </div>
+          </div>
+          <div className="lg:col-span-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 text-xs text-blue-100 space-y-3">
+            <div className="flex items-center gap-2 text-white font-bold text-sm">
+              <MapPin size={18} className="text-[#EA6624]" />
+              <span>Agence Ain El Turk (Oran)</span>
+            </div>
+            <p>Trouville (en face du Commissariat de police)</p>
+            <div className="pt-2 border-t border-white/10 space-y-1">
+              <p className="flex justify-between">
+                <span>Samedi - Jeudi :</span>
+                <span className="font-bold text-white">09h00 - 18h00</span>
+              </p>
+              <p className="flex justify-between">
+                <span>Permanence WhatsApp :</span>
+                <span className="text-emerald-300 font-bold">24/7</span>
+              </p>
             </div>
           </div>
         </div>
@@ -632,18 +702,18 @@ const ServicesPage = () => {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className={`${selectedType === 'omra' ? 'bg-amber-900' : 'bg-gray-900'} rounded-[40px] p-10 space-y-8 text-white flex flex-col justify-between border border-white/10 relative overflow-hidden group`}
+              className={`${selectedType === 'omra' ? 'bg-gradient-to-br from-[#0F264A] to-[#1C3B70]' : 'bg-gradient-to-br from-[#1C3B70] via-[#244985] to-primary'} rounded-[40px] p-10 space-y-8 text-white flex flex-col justify-between border border-white/10 relative overflow-hidden group shadow-xl`}
             >
-              <div className={`absolute top-0 right-0 w-32 h-32 ${selectedType === 'omra' ? 'bg-amber-500/20' : 'bg-primary/20'} blur-3xl rounded-full -translate-y-1/2 translate-x-1/2`}></div>
+              <div className={`absolute top-0 right-0 w-32 h-32 ${selectedType === 'omra' ? 'bg-amber-500/20' : 'bg-accent/20'} blur-3xl rounded-full -translate-y-1/2 translate-x-1/2`}></div>
               <div className="space-y-6 relative z-10">
-                <div className={`w-16 h-16 ${selectedType === 'omra' ? 'bg-amber-500' : 'bg-primary'} rounded-2xl flex items-center justify-center`}>
+                <div className={`w-16 h-16 ${selectedType === 'omra' ? 'bg-accent' : 'bg-white/10 backdrop-blur'} rounded-2xl flex items-center justify-center`}>
                   {selectedType === 'omra' ? <Moon size={32} /> : <Plane size={32} />}
                 </div>
                 <h3 className="text-3xl font-black tracking-tighter uppercase leading-none">
                   {selectedType === 'omra' ? 'Demande de' : 'Billetterie'} <br />
                   <span className="text-accent">{selectedType === 'omra' ? 'Visa Arabie Saoudite' : 'Aérienne'}</span>
                 </h3>
-                <p className="text-gray-400 font-medium leading-relaxed">
+                <p className="text-gray-300 font-medium leading-relaxed">
                   {selectedType === 'omra' 
                     ? "Nous facilitons l'obtention de votre visa pour l'Arabie Saoudite. Service rapide et fiable pour votre Omra ou voyage d'affaires."
                     : "Nous vous offrons un accès direct aux meilleures lignes mondiales. Vols nationaux et internationaux au meilleur prix garantis."}
@@ -653,7 +723,7 @@ const ServicesPage = () => {
                     ? ['Visa Omra', 'Visa Touristique', 'Visa Business', 'Assistance complète']
                     : ['Air Algérie', 'Tassili Airlines', 'Turkish Airlines', 'Air France']
                   ).map((p, i) => (
-                    <div key={i} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                    <div key={i} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-white/80">
                       <Check size={12} className="text-accent" /> {p}
                     </div>
                   ))}
@@ -661,7 +731,7 @@ const ServicesPage = () => {
               </div>
               <Link 
                 to={selectedType === 'omra' ? "/booking/visa?dest=Saudi Arabia" : "/booking/air"}
-                className="w-full bg-white text-gray-900 py-5 rounded-2xl font-black uppercase tracking-widest text-center hover:bg-accent hover:text-white transition-all relative z-10"
+                className="w-full bg-white text-gray-900 py-5 rounded-2xl font-black uppercase tracking-widest text-center hover:bg-accent hover:text-white transition-all relative z-10 shadow-lg"
               >
                 {selectedType === 'omra' ? "Demander un visa" : "Réserver un vol"}
               </Link>
@@ -676,7 +746,7 @@ const ServicesPage = () => {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-warm rounded-[40px] p-10 space-y-8 text-white flex flex-col justify-between border border-white/10 relative overflow-hidden group"
+              className="bg-gradient-to-br from-[#EA6624] via-[#F07A38] to-[#E25A18] rounded-[40px] p-10 space-y-8 text-white flex flex-col justify-between border border-white/10 relative overflow-hidden group shadow-xl shadow-accent/20"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2"></div>
               <div className="space-y-6 relative z-10">
@@ -685,15 +755,15 @@ const ServicesPage = () => {
                 </div>
                 <h3 className="text-3xl font-black tracking-tighter uppercase leading-none">
                   Hébergement <br />
-                  <span className="text-gray-900">Mondial</span>
+                  <span className="text-white drop-shadow-sm">Mondial</span>
                 </h3>
-                <p className="text-white/80 font-medium leading-relaxed">
+                <p className="text-white/90 font-medium leading-relaxed">
                   Accédez à plus de <span className="text-white font-bold">1 000 000 d'hôtels</span> à travers le monde. 
                   Nous garantissons les meilleurs tarifs pour tous vos séjours.
                 </p>
                 <div className="space-y-3">
                   {['Luxe & Palaces', 'Business Hotels', 'Resorts All-Inclusive', 'Appart-Hotels'].map((p, i) => (
-                    <div key={i} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-white/60">
+                    <div key={i} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-white/80">
                       <Check size={12} className="text-white" /> {p}
                     </div>
                   ))}
@@ -701,7 +771,7 @@ const ServicesPage = () => {
               </div>
               <Link 
                 to="/booking/hotel"
-                className="w-full bg-gray-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-center hover:bg-white hover:text-gray-900 transition-all relative z-10"
+                className="w-full bg-white text-[#EA6624] py-5 rounded-2xl font-black uppercase tracking-widest text-center hover:bg-gray-900 hover:text-white transition-all relative z-10 shadow-lg"
               >
                 Réserver un hôtel
               </Link>
@@ -721,10 +791,10 @@ const ServicesPage = () => {
                 <img 
                   src={offer.imageUrl} 
                   alt={offer.title} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
                   referrerPolicy="no-referrer"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = `https://placehold.co/800x600/1B365D/FFFFFF?text=${offer.title}`;
+                    (e.target as HTMLImageElement).src = `https://placehold.co/800x600/305AA2/FFFFFF?text=${offer.title}`;
                   }}
                 />
                 <div className="absolute top-6 left-6 flex flex-col gap-2">
@@ -825,8 +895,8 @@ const compressImage = async (file: File): Promise<Blob> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
         let width = img.width;
         let height = img.height;
 
@@ -850,7 +920,7 @@ const compressImage = async (file: File): Promise<Blob> => {
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
           else reject(new Error('Compression failed'));
-        }, 'image/jpeg', 0.7);
+        }, 'image/jpeg', 0.6);
       };
       img.onerror = (error) => reject(error);
     };
@@ -885,29 +955,38 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
       return;
     }
 
+    if (file) {
+      if (file.type === 'application/pdf' && file.size > 700 * 1024) {
+        toast.error("Le fichier PDF est trop volumineux (Max 700 Ko). Veuillez fournir un PDF plus léger ou une image.");
+        return;
+      }
+    }
+
     setLoading(true);
     setLoadingText('Préparation des données...');
     const formData = new FormData(e.currentTarget);
     
     try {
-      let passportUrl = '';
+      let passportScanUrl = '';
       if (file) {
-        setLoadingText('Optimisation de l\'image...');
-        let fileToUpload: File | Blob = file;
-        
-        // Compress image if it's larger than 500KB
-        if (file.type.startsWith('image/') && file.size > 500 * 1024) {
-          try {
-            fileToUpload = await compressImage(file);
-          } catch (err) {
-            console.warn("Compression failed, uploading original", err);
-          }
+        setLoadingText('Traitement du passeport...');
+        let fileToProcess: File | Blob = file;
+        if (file.type.startsWith('image/')) {
+          try { fileToProcess = await compressImage(file); } catch (err) { }
         }
+        
+        passportScanUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(fileToProcess);
+        });
 
-        setLoadingText('Envoi du document...');
-        const storageRef = ref(storage, `passports/${user.uid}/${Date.now()}_${file.name}`);
-        const uploadResult = await uploadBytes(storageRef, fileToUpload);
-        passportUrl = await getDownloadURL(uploadResult.ref);
+        if (passportScanUrl.length > 900000) {
+           toast.error("Le fichier est trop volumineux même après compression.");
+           setLoading(false);
+           return;
+        }
       }
 
       setLoadingText('Enregistrement de la demande...');
@@ -919,14 +998,34 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
         lastName: formData.get('lastName'),
         dob: formData.get('dob'),
         destination: formData.get('destination'),
-        passportScanUrl: passportUrl,
+        departureDate: formData.get('departureDate') || '',
+        returnDate: formData.get('returnDate') || '',
+        passportScanUrl,
         status: 'pending',
         createdAt: Timestamp.now(),
       };
 
-      await addDoc(collection(db, 'bookings'), bookingData);
-      toast.success('Votre demande a été soumise avec succès !');
+      const bookingDocRef = await addDoc(collection(db, 'bookings'), bookingData);
+
+      // Auto-append to Google Sheets if configured & token available
+      try {
+        const token = getCachedAccessToken();
+        if (token) {
+          const settingsSnap = await getDoc(doc(db, 'settings', 'google_sheets'));
+          if (settingsSnap.exists()) {
+            const config = settingsSnap.data();
+            if (config.spreadsheetId && (config.autoSync ?? true)) {
+              await appendSingleBookingToSheet(token, config.spreadsheetId, { id: bookingDocRef.id, ...bookingData } as any);
+            }
+          }
+        }
+      } catch (sheetErr) {
+        console.warn("Auto-sync booking to Google Sheets deferred:", sheetErr);
+      }
+
+      toast.success('Votre demande a été enregistrée avec succès !');
       navigate('/track');
+
     } catch (error) {
       console.error(error);
       toast.error('Une erreur est survenue lors de la soumission.');
@@ -963,9 +1062,13 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white rounded-[40px] shadow-2xl border border-gray-50 overflow-hidden"
       >
-        <div className="bg-primary p-10 text-white">
-          <h1 className="text-3xl font-black uppercase tracking-tight">Demande de {serviceTitles[type || ''] || 'Service'}</h1>
-          <p className="text-white/70 text-xs font-bold uppercase tracking-widest mt-2">Veuillez remplir le formulaire ci-dessous avec précision.</p>
+        <div className="bg-gradient-to-r from-primary via-[#244985] to-[#1C3B70] p-10 text-white relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-32 h-32 bg-accent/15 blur-2xl rounded-full"></div>
+          <div className="relative z-10">
+            <span className="inline-block text-[10px] font-black uppercase tracking-[0.3em] text-accent mb-2">Afaf Voyages</span>
+            <h1 className="text-3xl font-black uppercase tracking-tight">Demande de {serviceTitles[type || ''] || 'Service'}</h1>
+            <p className="text-white/80 text-xs font-bold uppercase tracking-widest mt-2">Veuillez remplir le formulaire ci-dessous avec précision.</p>
+          </div>
         </div>
         
         <form onSubmit={handleSubmit} className="p-10 space-y-8">
@@ -975,7 +1078,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
               <input 
                 name="lastName" 
                 required 
-                className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                className="w-full bg-gray-50 border border-gray-100 rounded-2xl h-14 px-6 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                 placeholder="Votre nom"
               />
             </div>
@@ -984,7 +1087,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
               <input 
                 name="firstName" 
                 required 
-                className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                className="w-full bg-gray-50 border border-gray-100 rounded-2xl h-14 px-6 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                 placeholder="Votre prénom"
               />
             </div>
@@ -997,7 +1100,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
                 name="dob" 
                 type="date" 
                 required 
-                className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                className="w-full bg-gray-50 border border-gray-100 rounded-2xl h-14 px-6 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
               />
             </div>
             <div className="space-y-3">
@@ -1007,7 +1110,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
                   name="destination" 
                   required 
                   defaultValue={initialDestination}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary outline-none transition-all font-medium appearance-none"
+                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl h-14 px-6 focus:ring-2 focus:ring-primary outline-none transition-all font-medium appearance-none"
                 >
                   <option value="" disabled>Sélectionnez un pays</option>
                   {visaCountries.map(country => (
@@ -1021,7 +1124,7 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
                     list="destinations-list"
                     required 
                     defaultValue={initialDestination}
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl h-14 px-6 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                     placeholder="Ex: Paris, France"
                   />
                   {type === 'air' && (
@@ -1061,6 +1164,26 @@ const BookingFormPage = ({ user }: { user: FirebaseUser | null }) => {
                 </>
               )}
             </div>
+            {type !== 'visa' && (
+              <>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Date d'aller (Optionnel)</label>
+                  <input 
+                    name="departureDate" 
+                    type="date" 
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl h-14 px-6 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Date de retour (Optionnel)</label>
+                  <input 
+                    name="returnDate" 
+                    type="date" 
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl h-14 px-6 focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -1114,16 +1237,24 @@ const TrackRequestPage = ({ user }: { user: FirebaseUser | null }) => {
 
     const q = query(
       collection(db, 'bookings'),
-      where('uid', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('uid', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BookingRequest));
+      
+      // Sort on the client side
+      data.sort((a, b) => {
+        const dateA = a.createdAt?.toMillis?.() || 0;
+        const dateB = b.createdAt?.toMillis?.() || 0;
+        return dateB - dateA; // desc
+      });
+      
       setBookings(data);
       setLoading(false);
     }, (error) => {
       console.error("Firestore Error:", error);
+      toast.error('Erreur de chargement des demandes');
       setLoading(false);
     });
 
@@ -1132,10 +1263,10 @@ const TrackRequestPage = ({ user }: { user: FirebaseUser | null }) => {
 
   const getStatusColor = (status: BookingStatus) => {
     switch (status) {
-      case 'pending': return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'pending': return 'bg-amber-50 text-amber-800 border-amber-200';
       case 'in-progress': return 'bg-primary/10 text-primary border-primary/20';
-      case 'confirmed': return 'bg-green-100 text-green-700 border-green-200';
-      case 'action-needed': return 'bg-red-100 text-red-700 border-red-200';
+      case 'confirmed': return 'bg-emerald-50 text-emerald-800 border-emerald-300';
+      case 'action-needed': return 'bg-orange-50 text-[#EA6624] border-orange-300';
       default: return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
@@ -1164,10 +1295,23 @@ const TrackRequestPage = ({ user }: { user: FirebaseUser | null }) => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-20 space-y-12">
+    <div className="max-w-7xl mx-auto px-4 py-20 space-y-10">
       <div className="space-y-2">
         <h1 className="text-4xl font-bold text-gray-900">Mes Demandes</h1>
         <p className="text-gray-500">Suivez l'état de vos réservations en temps réel.</p>
+      </div>
+
+      {/* Real-time status toast notice */}
+      <div className="bg-gradient-to-r from-blue-50/80 to-orange-50/40 border border-blue-100/80 rounded-2xl p-4 flex items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="relative flex h-3 w-3 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </div>
+          <p className="text-xs text-gray-700 leading-relaxed">
+            <strong className="text-primary font-bold">Alertes toast en direct actives :</strong> Vous êtes notifié instantanément à l'écran dès que votre demande passe d'<span className="font-bold text-orange-600">"En attente"</span> à <span className="font-bold text-emerald-700">"Confirmé"</span> ou <span className="font-bold text-[#EA6624]">"Action requise"</span>.
+          </p>
+        </div>
       </div>
 
       {loading ? (
@@ -1186,34 +1330,58 @@ const TrackRequestPage = ({ user }: { user: FirebaseUser | null }) => {
               key={booking.id}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6"
+              className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col gap-4"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-primary">
-                  {booking.serviceType === 'air' && <Plane size={28} />}
-                  {booking.serviceType === 'sea' && <Ship size={28} />}
-                  {booking.serviceType === 'hotel' && <Hotel size={28} />}
-                  {booking.serviceType === 'visa' && <FileText size={28} />}
-                  {booking.serviceType === 'organized-trip' && <Globe size={28} />}
-                  {booking.serviceType === 'omra' && <Moon size={28} />}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-primary shrink-0">
+                    {booking.serviceType === 'air' && <Plane size={28} />}
+                    {booking.serviceType === 'sea' && <Ship size={28} />}
+                    {booking.serviceType === 'hotel' && <Hotel size={28} />}
+                    {booking.serviceType === 'visa' && <FileText size={28} />}
+                    {booking.serviceType === 'organized-trip' && <Globe size={28} />}
+                    {booking.serviceType === 'omra' && <Moon size={28} />}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 capitalize text-base">{booking.serviceType} - {booking.destination}</h3>
+                    <p className="text-xs text-gray-500">Soumis le {booking.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || 'Date récente'}</p>
+                    {(booking.departureDate || booking.returnDate) && (
+                      <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-bold">
+                        {booking.departureDate && `Aller: ${booking.departureDate}`} 
+                        {booking.departureDate && booking.returnDate && ' | '} 
+                        {booking.returnDate && `Retour: ${booking.returnDate}`}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 capitalize">{booking.serviceType} - {booking.destination}</h3>
-                  <p className="text-xs text-gray-500">Soumis le {booking.createdAt?.toDate().toLocaleDateString()}</p>
+
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getStatusColor(booking.status)}`}>
+                    {getStatusLabel(booking.status)}
+                  </span>
+                  {booking.adminNotes && booking.adminNotes.length > 0 && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                      <AlertCircle size={14} className="text-[#EA6624]" />
+                      Note: {booking.adminNotes[booking.adminNotes.length - 1].text}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-4">
-                <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getStatusColor(booking.status)}`}>
-                  {getStatusLabel(booking.status)}
-                </span>
-                {booking.adminNotes && booking.adminNotes.length > 0 && (
-                  <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                    <AlertCircle size={14} className="text-orange-500" />
-                    Note: {booking.adminNotes[booking.adminNotes.length - 1].text}
-                  </div>
-                )}
-              </div>
+              {/* Status specific context alerts */}
+              {booking.status === 'confirmed' && (
+                <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50/90 px-4 py-2.5 rounded-2xl border border-emerald-200">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <span><strong>Réservation validée !</strong> Vos billets / documents sont confirmés par notre agence.</span>
+                </div>
+              )}
+
+              {booking.status === 'action-needed' && (
+                <div className="flex items-center gap-2 text-xs text-[#EA6624] bg-orange-50/90 px-4 py-2.5 rounded-2xl border border-orange-200">
+                  <AlertCircle size={16} className="text-[#EA6624] shrink-0" />
+                  <span><strong>Action requise :</strong> Veuillez consulter les instructions de l'agence ou nous contacter directement via WhatsApp pour compléter votre dossier.</span>
+                </div>
+              )}
             </motion.div>
           ))}
         </div>
@@ -1223,344 +1391,7 @@ const TrackRequestPage = ({ user }: { user: FirebaseUser | null }) => {
 };
 
 const AdminDashboardPage = ({ profile }: { profile: UserProfile | null }) => {
-  const [bookings, setBookings] = useState<BookingRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sortField, setSortField] = useState<'name' | 'createdAt' | 'updatedAt'>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [serviceFilter, setServiceFilter] = useState<string>('all');
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (profile && profile.role !== 'admin') {
-      navigate('/');
-      return;
-    }
-
-    const q = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BookingRequest));
-      setBookings(data);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [profile, navigate]);
-
-  const filteredAndSortedBookings = useMemo(() => {
-    let result = [...bookings];
-
-    // Search filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(b => 
-        `${b.firstName} ${b.lastName}`.toLowerCase().includes(term) ||
-        b.email.toLowerCase().includes(term) ||
-        b.destination.toLowerCase().includes(term)
-      );
-    }
-
-    // Status filter
-    if (statusFilter !== 'all') {
-      result = result.filter(b => b.status === statusFilter);
-    }
-
-    // Service filter
-    if (serviceFilter !== 'all') {
-      result = result.filter(b => b.serviceType === serviceFilter);
-    }
-
-    // Sorting
-    return result.sort((a, b) => {
-      let comparison = 0;
-      if (sortField === 'name') {
-        const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
-        const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
-        comparison = nameA.localeCompare(nameB);
-      } else if (sortField === 'createdAt') {
-        const dateA = a.createdAt?.toMillis?.() || 0;
-        const dateB = b.createdAt?.toMillis?.() || 0;
-        comparison = dateA - dateB;
-      } else if (sortField === 'updatedAt') {
-        const dateA = a.updatedAt?.toMillis?.() || 0;
-        const dateB = b.updatedAt?.toMillis?.() || 0;
-        comparison = dateA - dateB;
-      }
-      return sortOrder === 'asc' ? comparison : -comparison;
-    });
-  }, [bookings, sortField, sortOrder, searchTerm, statusFilter, serviceFilter]);
-
-  const toggleSort = (field: 'name' | 'createdAt' | 'updatedAt') => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
-    }
-  };
-
-  const updateStatus = async (id: string, status: BookingStatus) => {
-    try {
-      await updateDoc(doc(db, 'bookings', id), { 
-        status,
-        updatedAt: Timestamp.now()
-      });
-      toast.success('Statut mis à jour');
-    } catch (error) {
-      toast.error('Erreur lors de la mise à jour');
-    }
-  };
-
-  const addNote = async (id: string) => {
-    const note = prompt('Entrez une note pour le client :');
-    if (note === null || note.trim() === '') return;
-    
-    try {
-      await updateDoc(doc(db, 'bookings', id), { 
-        adminNotes: arrayUnion({
-          text: note,
-          createdAt: Timestamp.now(),
-          author: profile?.email || 'Admin'
-        }),
-        updatedAt: Timestamp.now()
-      });
-      toast.success('Note ajoutée');
-    } catch (error) {
-      toast.error('Erreur lors de l\'ajout de la note');
-    }
-  };
-
-  const exportToCSV = () => {
-    if (filteredAndSortedBookings.length === 0) {
-      toast.error('Aucune donnée à exporter');
-      return;
-    }
-
-    const headers = ['ID', 'Date de création', 'Client', 'Email', 'Service', 'Destination', 'Statut'];
-    
-    const escapeCSV = (str: string) => `"${str.replace(/"/g, '""')}"`;
-
-    const csvRows = filteredAndSortedBookings.map(b => {
-      const date = b.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || '';
-      const client = `${b.firstName} ${b.lastName}`;
-      return [
-        b.id,
-        date,
-        escapeCSV(client),
-        escapeCSV(b.email),
-        b.serviceType,
-        escapeCSV(b.destination),
-        b.status
-      ].join(',');
-    });
-
-    const csvContent = [headers.join(','), ...csvRows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `reservations_afaf_voyages_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  if (!profile || profile.role !== 'admin') return null;
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-20 space-y-12">
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Tableau de Bord Admin</h1>
-          <p className="text-gray-500">Gérez les demandes de réservation entrantes.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={exportToCSV}
-            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-6 py-3 rounded-2xl text-sm font-bold hover:bg-gray-50 transition-all shadow-sm"
-          >
-            <Download size={18} />
-            Exporter CSV
-          </button>
-          <div className="bg-primary/10 text-primary px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border border-primary/20">
-            {bookings.length} Demandes au total
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input 
-            type="text"
-            placeholder="Rechercher un client..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-sm"
-          />
-        </div>
-        <select 
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-sm appearance-none"
-        >
-          <option value="all">Tous les statuts</option>
-          <option value="pending">En attente</option>
-          <option value="in-progress">En cours</option>
-          <option value="confirmed">Confirmé</option>
-          <option value="action-needed">Action requise</option>
-        </select>
-        <select 
-          value={serviceFilter}
-          onChange={(e) => setServiceFilter(e.target.value)}
-          className="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-sm appearance-none"
-        >
-          <option value="all">Tous les services</option>
-          <option value="visa">Visa</option>
-          <option value="flight">Vol</option>
-          <option value="hotel">Hôtel</option>
-          <option value="package">Package</option>
-        </select>
-        <button 
-          onClick={() => { setSearchTerm(''); setStatusFilter('all'); setServiceFilter('all'); }}
-          className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2"
-        >
-          Réinitialiser
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="animate-spin text-primary" size={48} />
-        </div>
-      ) : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-xl overflow-hidden overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th 
-                  className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-primary transition-colors"
-                  onClick={() => toggleSort('name')}
-                >
-                  <div className="flex items-center gap-2">
-                    Client
-                    {sortField === 'name' ? (
-                      sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-30" />}
-                  </div>
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Service</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Destination</th>
-                <th 
-                  className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-primary transition-colors"
-                  onClick={() => toggleSort('createdAt')}
-                >
-                  <div className="flex items-center gap-2">
-                    Soumis le
-                    {sortField === 'createdAt' ? (
-                      sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-30" />}
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-primary transition-colors"
-                  onClick={() => toggleSort('updatedAt')}
-                >
-                  <div className="flex items-center gap-2">
-                    Mise à jour
-                    {sortField === 'updatedAt' ? (
-                      sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-30" />}
-                  </div>
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Passeport</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Statut</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filteredAndSortedBookings.map((b) => (
-                <tr key={b.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-bold text-gray-900">{b.lastName} {b.firstName}</div>
-                    <div className="text-[10px] text-gray-400">{b.email}</div>
-                    <div className="text-[10px] text-gray-400">Né le {b.dob}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-xs font-medium text-gray-600 capitalize">{b.serviceType}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">{b.destination}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">
-                      {b.createdAt?.toDate().toLocaleDateString('fr-FR')}
-                    </div>
-                    <div className="text-[10px] text-gray-400">
-                      {b.createdAt?.toDate().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">
-                      {b.updatedAt ? b.updatedAt.toDate().toLocaleDateString('fr-FR') : '-'}
-                    </div>
-                    <div className="text-[10px] text-gray-400">
-                      {b.updatedAt ? b.updatedAt.toDate().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {b.passportScanUrl ? (
-                      <a 
-                        href={b.passportScanUrl} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="text-primary hover:underline text-[10px] font-black uppercase tracking-widest flex items-center gap-1"
-                      >
-                        <FileText size={14} /> Voir
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 text-xs italic">Aucun</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <select 
-                      value={b.status}
-                      onChange={(e) => updateStatus(b.id, e.target.value as BookingStatus)}
-                      className="text-xs bg-gray-100 border-none rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      <option value="pending">En attente</option>
-                      <option value="in-progress">En cours</option>
-                      <option value="confirmed">Confirmé</option>
-                      <option value="action-needed">Action requise</option>
-                    </select>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button 
-                        onClick={() => addNote(b.id)}
-                        className="p-2 text-gray-400 hover:text-primary transition-colors relative"
-                        title="Ajouter une note"
-                      >
-                        <MessageCircle size={18} />
-                        {b.adminNotes && b.adminNotes.length > 0 && (
-                          <span className="absolute top-0 right-0 w-4 h-4 bg-primary text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-                            {b.adminNotes.length}
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
+  return <AdminDashboard profile={profile} />;
 };
 
 const ProfilePage = ({ user, profile }: { user: FirebaseUser | null, profile: UserProfile | null }) => {
@@ -1577,9 +1408,23 @@ const ProfilePage = ({ user, profile }: { user: FirebaseUser | null, profile: Us
     setUploading(true);
 
     try {
-      const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}_${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(uploadResult.ref);
+      let fileToProcess: File | Blob = file;
+      if (file.type.startsWith('image/')) {
+        try { fileToProcess = await compressImage(file); } catch (err) { }
+      }
+      
+      const url = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(fileToProcess);
+      });
+
+      if (url.length > 900000) {
+         toast.error("L'image est trop volumineuse.");
+         setUploading(false);
+         return;
+      }
 
       await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url });
       setAvatarUrl(url);
@@ -1656,17 +1501,17 @@ const ProfilePage = ({ user, profile }: { user: FirebaseUser | null, profile: Us
 const LoginPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
 
-  const handleGoogleLogin = async () => {
+  const handleLogin = async () => {
     setLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
+      const provider = getGoogleProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setCachedAccessToken(credential.accessToken);
+      }
 
       // Check if user profile exists
       const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -1688,59 +1533,14 @@ const LoginPage = () => {
       
       toast.success('Connexion réussie !');
       navigate('/');
-    } catch (error) {
-      console.error(error);
-      toast.error('Erreur lors de la connexion avec Google.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password || (isSignUp && !name)) {
-      toast.error('Veuillez remplir tous les champs.');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      if (isSignUp) {
-        const result = await createUserWithEmailAndPassword(auth, email, password);
-        const user = result.user;
-        const isAdminEmail = user.email === 'afafvoyage54@gmail.com';
-        
-        const profile: UserProfile = {
-          uid: user.uid,
-          displayName: name,
-          email: user.email || '',
-          role: isAdminEmail ? 'admin' : 'client',
-          createdAt: Timestamp.now(),
-        };
-        await setDoc(doc(db, 'users', user.uid), profile);
-        toast.success('Compte créé avec succès !');
-      } else {
-        const result = await signInWithEmailAndPassword(auth, email, password);
-        const user = result.user;
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        const isAdminEmail = user.email === 'afafvoyage54@gmail.com';
-        
-        if (isAdminEmail && userDoc.exists() && userDoc.data()?.role !== 'admin') {
-          await updateDoc(doc(db, 'users', user.uid), { role: 'admin' });
-        }
-        toast.success('Connexion réussie !');
-      }
-      navigate('/');
     } catch (error: any) {
-      console.error(error);
-      if (error.code === 'auth/email-already-in-use') {
-        toast.error('Cet email est déjà utilisé.');
-      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        toast.error('Email ou mot de passe incorrect.');
-      } else if (error.code === 'auth/weak-password') {
-        toast.error('Le mot de passe doit contenir au moins 6 caractères.');
+      console.error("Login error:", error);
+      if (error.code === 'auth/unauthorized-domain') {
+        toast.error("Erreur : Ce domaine n'est pas autorisé. Ajoutez-le dans Firebase Console > Authentication > Settings > Authorized domains.", { duration: 8000 });
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        toast.error("La fenêtre de connexion a été fermée.");
       } else {
-        toast.error(isSignUp ? 'Erreur lors de la création du compte.' : 'Erreur lors de la connexion.');
+        toast.error(`Erreur lors de la connexion : ${error.message || 'Erreur inconnue'}`);
       }
     } finally {
       setLoading(false);
@@ -1748,89 +1548,29 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[70vh] flex items-center justify-center px-4">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full bg-white p-10 rounded-3xl shadow-2xl border border-gray-100 text-center space-y-8"
       >
         <div className="flex items-center justify-center mb-6">
-          <div className="flex items-center gap-2">
-            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white font-black text-2xl">
-              A
-            </div>
-            <div className="flex flex-col text-left">
-              <span className="font-black text-2xl leading-none text-gray-900 tracking-tighter uppercase">Afaf</span>
-              <span className="text-xs font-black text-accent tracking-[0.2em] uppercase">Voyages</span>
-            </div>
+          <div className="p-4 bg-gray-50/80 rounded-3xl border border-gray-100 shadow-sm inline-block">
+            <img src="/assets/aistudio/logo_d451fd9f.png" alt="Afaf Voyages" className="h-28 md:h-36 w-auto object-contain" />
           </div>
         </div>
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">{isSignUp ? 'Créer un compte' : 'Bienvenue'}</h1>
-          <p className="text-gray-500">
-            {isSignUp ? 'Inscrivez-vous pour commencer.' : 'Connectez-vous pour accéder à vos services de voyage.'}
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">Bienvenue</h1>
+          <p className="text-gray-500">Connectez-vous pour accéder à vos services de voyage.</p>
         </div>
-
-        <form onSubmit={handleEmailAuth} className="space-y-4">
-          {isSignUp && (
-            <input
-              type="text"
-              placeholder="Nom complet"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
-            />
-          )}
-          <input
-            type="email"
-            placeholder="Adresse email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
-          />
-          <input
-            type="password"
-            placeholder="Mot de passe"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary text-white py-4 rounded-xl font-bold hover:bg-secondary transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
-          >
-            {isSignUp ? "S'inscrire" : "Se connecter"}
-          </button>
-        </form>
-
-        <div className="relative flex items-center py-4">
-          <div className="flex-grow border-t border-gray-200"></div>
-          <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-bold">OU</span>
-          <div className="flex-grow border-t border-gray-200"></div>
-        </div>
-
         <button
-          onClick={handleGoogleLogin}
+          onClick={handleLogin}
           disabled={loading}
-          type="button"
-          className="w-full flex items-center justify-center gap-4 bg-white border border-gray-200 py-4 rounded-xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-4 bg-white border border-gray-200 py-4 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm hover:shadow-md disabled:opacity-50"
         >
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
           Continuer avec Google
         </button>
-
-        <p className="text-sm text-gray-500 mt-6">
-          {isSignUp ? 'Déjà un compte ?' : "Vous n'avez pas de compte ?"}
-          <button 
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)} 
-            className="ml-1 text-primary font-bold hover:underline"
-          >
-            {isSignUp ? 'Se connecter' : "S'inscrire"}
-          </button>
-        </p>
       </motion.div>
     </div>
   );
@@ -1874,7 +1614,9 @@ export default function App() {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">
         <div className="space-y-6 text-center">
-          <img src="/logo.png" alt="Afaf Voyages" className="h-24 w-auto animate-pulse mx-auto" referrerPolicy="no-referrer" />
+          <div className="p-4 bg-white rounded-3xl border border-gray-100 shadow-xl inline-block">
+            <img src="/assets/aistudio/logo_d451fd9f.png" alt="Afaf Voyages" className="h-32 md:h-40 w-auto object-contain animate-pulse mx-auto" referrerPolicy="no-referrer" />
+          </div>
           <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-gray-500 font-medium animate-pulse">Chargement d'Afaf Voyages...</p>
         </div>
@@ -1882,51 +1624,54 @@ export default function App() {
     );
   }
 
-
   return (
     <Router>
-      <div className="min-h-screen bg-white flex flex-col font-sans selection:bg-primary/10 selection:text-primary">
-        <Navbar user={user} profile={profile} />
-        
-        <main className="flex-1">
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/services" element={<ServicesPage />} />
-            <Route path="/booking/:type" element={<BookingFormPage user={user} />} />
-            <Route path="/track" element={<TrackRequestPage user={user} />} />
-            <Route path="/admin" element={<AdminDashboardPage profile={profile} />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/profile" element={<ProfilePage user={user} profile={profile} />} />
-          </Routes>
-        </main>
+      <NotificationProvider user={user}>
+        <div className="min-h-screen bg-white flex flex-col font-sans selection:bg-primary/10 selection:text-primary">
+          <Navbar user={user} profile={profile} />
+          
+          <main className="flex-1">
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/services" element={<ServicesPage />} />
+              <Route path="/contact" element={<ContactAppointmentPage user={user} />} />
+              <Route path="/rendez-vous" element={<ContactAppointmentPage user={user} />} />
+              <Route path="/booking/:type" element={<BookingFormPage user={user} />} />
+              <Route path="/track" element={<TrackRequestPage user={user} />} />
+              <Route path="/admin" element={<AdminDashboardPage profile={profile} />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/profile" element={<ProfilePage user={user} profile={profile} />} />
+            </Routes>
+          </main>
 
-        <Footer />
-        
-        {/* WhatsApp Floating Button */}
-        <div className="fixed bottom-24 right-6 flex flex-col gap-3 z-50">
-          <a 
-            href="https://wa.me/213781949667" 
-            target="_blank" 
-            rel="noreferrer"
-            className="bg-green-500 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 active:scale-95 group"
-            title="Contactez-nous sur WhatsApp (+213 781 94 96 67)"
-          >
-            <Phone size={24} />
-          </a>
-          <a 
-            href="https://wa.me/213551372722" 
-            target="_blank" 
-            rel="noreferrer"
-            className="bg-green-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-700 transition-all hover:scale-110 active:scale-95 group"
-            title="Contactez-nous sur WhatsApp (+213 551 37 27 22)"
-          >
-            <Phone size={24} />
-          </a>
+          <Footer />
+          
+          {/* WhatsApp Floating Button */}
+          <div className="fixed bottom-24 right-6 flex flex-col gap-3 z-50">
+            <a 
+              href="https://wa.me/213781949667" 
+              target="_blank" 
+              rel="noreferrer"
+              className="bg-green-500 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 active:scale-95 group"
+              title="Contactez-nous sur WhatsApp (+213 781 94 96 67)"
+            >
+              <Phone size={24} />
+            </a>
+            <a 
+              href="https://wa.me/213551372722" 
+              target="_blank" 
+              rel="noreferrer"
+              className="bg-green-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-700 transition-all hover:scale-110 active:scale-95 group"
+              title="Contactez-nous sur WhatsApp (+213 551 37 27 22)"
+            >
+              <Phone size={24} />
+            </a>
+          </div>
+
+          <Chatbot />
+          <Toaster position="top-right" richColors />
         </div>
-
-        <Chatbot />
-        <Toaster position="top-center" richColors />
-      </div>
+      </NotificationProvider>
     </Router>
   );
 }

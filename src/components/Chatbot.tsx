@@ -69,9 +69,9 @@ export default function Chatbot() {
           >
             {/* Header */}
             <div className="bg-primary p-4 text-white flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                  <MessageSquare size={18} />
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-white rounded-xl p-1 flex items-center justify-center shadow-md overflow-hidden flex-shrink-0">
+                  <img src="/assets/aistudio/logo_d451fd9f.png" alt="Afaf Voyages" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm">Assistant Afaf Voyages</h3>

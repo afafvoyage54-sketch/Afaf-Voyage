@@ -19,6 +19,8 @@ export interface BookingRequest {
   lastName: string;
   dob: string;
   destination: string;
+  departureDate?: string;
+  returnDate?: string;
   email: string;
   passportScanUrl?: string;
   status: BookingStatus;
@@ -51,3 +53,49 @@ export interface TravelOffer {
   partner?: string;
   amenities?: string[];
 }
+
+export interface InAppNotification {
+  id: string;
+  bookingId: string;
+  type: 'confirmed' | 'action-needed';
+  title: string;
+  message: string;
+  serviceType: ServiceType;
+  destination: string;
+  timestamp: number;
+  read: boolean;
+}
+
+export type AppointmentType = 'agency' | 'phone' | 'video';
+export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
+
+export interface Appointment {
+  id: string;
+  uid?: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  type: AppointmentType;
+  serviceInterest: string;
+  date: string;
+  timeSlot: string;
+  numberOfPeople?: number;
+  notes?: string;
+  status: AppointmentStatus;
+  adminNotes?: string;
+  createdAt: any;
+  updatedAt?: any;
+}
+
+export interface ContactMessage {
+  id: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  subject: string;
+  message: string;
+  urgent: boolean;
+  status: 'new' | 'read' | 'replied';
+  createdAt: any;
+}
+

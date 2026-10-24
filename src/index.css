@@ -1,12 +1,18 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,700;1,800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --color-primary: #1B365D;
-  --color-accent: #F37021;
-  --color-secondary: #2C5282;
-  --color-warm: #ED8936;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cinzel", "Playfair Display", Georgia, serif;
+  --font-logo: "Cinzel", serif;
+  --color-primary: #305AA2;
+  --color-primary-dark: #1E4280;
+  --color-primary-light: #EEF4FB;
+  --color-secondary: #234887;
+  --color-accent: #EA6624;
+  --color-accent-dark: #D35415;
+  --color-accent-light: #FFF4ED;
+  --color-warm: #EA6624;
 }
 
 @layer base {

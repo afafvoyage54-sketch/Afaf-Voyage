@@ -32,6 +32,45 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "Last Update Date" }
       },
       "required": ["uid", "serviceType", "firstName", "lastName", "dob", "destination", "status", "createdAt"]
+    },
+    "Appointment": {
+      "title": "Appointment Booking",
+      "description": "An appointment or consultation request booked by a client.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "type": { "type": "string", "enum": ["agency", "phone", "video"] },
+        "serviceInterest": { "type": "string" },
+        "date": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "numberOfPeople": { "type": "integer" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"] },
+        "adminNotes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "phone", "type", "serviceInterest", "date", "timeSlot", "status", "createdAt"]
+    },
+    "ContactMessage": {
+      "title": "Contact Message",
+      "description": "Direct message or callback inquiry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "urgent": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["new", "read", "replied"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "phone", "subject", "message", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -42,6 +81,14 @@
     "bookings/{bookingId}": {
       "schema": "BookingRequest",
       "description": "Travel booking requests"
+    },
+    "appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Appointments and consultation requests"
+    },
+    "contact_messages/{messageId}": {
+      "schema": "ContactMessage",
+      "description": "Direct contact inquiries"
     }
   }
 }
