@@ -5,4 +5,6 @@
       "destination": "/index.html"
     }
   ]
+{
+  "installCommand": "npm install"
 }
